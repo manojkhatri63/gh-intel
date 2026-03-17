@@ -12,12 +12,48 @@ const LINES = [
 
 export default function Home() {
   const [shown, setShown] = useState<string[]>([]);
+  // New state for repository input and loading status
+  const [repoQuery, setRepoQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
     LINES.forEach((line, i) => {
       setTimeout(() => setShown(prev => [...prev, line]), i * 600);
     });
   }, []);
+
+  // New function to trigger the backend refresh
+  const handleRefresh = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repoQuery.includes('/')) {
+      alert("Please enter a valid repo in 'owner/repo' format (e.g., facebook/react)");
+      return;
+    }
+
+    setIsRefreshing(true);
+    setStatusMessage('Analyzing repository...');
+
+    try {
+      const response = await fetch('/api/prs/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo: repoQuery })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setStatusMessage(`Success: ${data.message}`);
+      } else {
+        setStatusMessage(`Error: ${data.error || 'Failed to fetch'}`);
+      }
+    } catch (err) {
+      setStatusMessage('Network error. Check backend connection.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   return (
     <main style={{
@@ -93,6 +129,64 @@ export default function Home() {
           PR Digest scores every open pull request by staleness and size.
           Get a prioritized briefing every morning — no more lost PRs.
         </p>
+
+        {/* NEW: Search Input Section */}
+        <form onSubmit={handleRefresh} style={{
+          marginBottom: '2rem',
+          display: 'flex',
+          gap: '12px',
+          padding: '4px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+        }}>
+          <input 
+            type="text" 
+            placeholder="Search repository (e.g. vercel/next.js)"
+            value={repoQuery}
+            onChange={(e) => setRepoQuery(e.target.value)}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              padding: '12px 16px',
+              color: 'var(--text)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 14,
+              outline: 'none',
+            }}
+          />
+          <button 
+            type="submit"
+            disabled={isRefreshing}
+            style={{
+              background: isRefreshing ? 'var(--faint)' : 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '0 20px',
+              fontSize: 13,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              transition: 'opacity 0.2s',
+            }}
+          >
+            {isRefreshing ? 'SCORING...' : 'ANALYZE'}
+          </button>
+        </form>
+
+        {statusMessage && (
+          <p style={{ 
+            fontSize: 12, 
+            fontFamily: 'var(--font-mono)', 
+            color: statusMessage.includes('Error') ? 'var(--red)' : 'var(--green)',
+            marginTop: '-1.5rem',
+            marginBottom: '1.5rem' 
+          }}>
+            {statusMessage}
+          </p>
+        )}
 
         {/* terminal block */}
         <div style={{
