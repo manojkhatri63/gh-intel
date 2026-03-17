@@ -50,14 +50,17 @@ router.post(
         for (const pr of scoredPRs) {
           const now = new Date();
           await pool.query(
-            `INSERT INTO pull_requests (repo_name, pr_number, title, author, created_at, updated_at, additions, deletions, staleness_score, size_score, priority_score, fetched_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            `INSERT INTO pull_requests (repo_name, pr_number, title, author, created_at, updated_at, additions, deletions, files_changed, review_comments, commits_count, draft, staleness_score, size_score, priority_score, risk_score, fetched_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
              ON CONFLICT (repo_name, pr_number) DO UPDATE SET
              title = $3, author = $4, created_at = $5, updated_at = $6,
-             additions = $7, deletions = $8, staleness_score = $9,
-             size_score = $10, priority_score = $11, fetched_at = $12`,
+             additions = $7, deletions = $8, files_changed = $9, review_comments = $10,
+             commits_count = $11, draft = $12, staleness_score = $13,
+             size_score = $14, priority_score = $15, risk_score = $16, fetched_at = $17`,
             [pr.repo_name, pr.pr_number, pr.title, pr.author, pr.created_at, pr.updated_at,
-             pr.additions, pr.deletions, pr.staleness_score, pr.size_score, pr.priority_score, now]
+             pr.additions, pr.deletions, JSON.stringify(pr.files_changed || []), pr.review_comments || 0,
+             pr.commits_count || 0, pr.draft || false, pr.staleness_score, pr.size_score, 
+             pr.priority_score, pr.risk_score || 'low', now]
           );
         }
       } catch {

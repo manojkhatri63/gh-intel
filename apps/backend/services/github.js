@@ -121,6 +121,32 @@ async function fetchOpenPRsForRepo(repoFullName) {
 
         const detailData = await detailResponse.json();
 
+        // Fetch files changed in this PR
+        let files_changed = [];
+        try {
+          const filesResponse = await githubFetch(`${pr.url}/files?per_page=100`);
+          if (filesResponse.ok) {
+            const filesData = await filesResponse.json();
+            files_changed = Array.isArray(filesData) ? filesData.map(f => f.filename) : [];
+          }
+        } catch {
+          // Silently fail if files can't be fetched
+        }
+
+        // Fetch commits in this PR
+        let commits_count = 0;
+        try {
+          const commitsResponse = await githubFetch(`${pr.url}/commits?per_page=1`);
+          if (commitsResponse.ok) {
+            const link = commitsResponse.headers.get('link');
+            // Parse pagination link to get total count
+            const match = link?.match(/&page=(\d+)>; rel="last"/);
+            commits_count = match ? parseInt(match[1], 10) : 1;
+          }
+        } catch {
+          commits_count = 1;
+        }
+
         return {
           repo_name: repoFullName,
           pr_number: pr.number,
@@ -130,6 +156,10 @@ async function fetchOpenPRsForRepo(repoFullName) {
           updated_at: pr.updated_at,
           additions: detailData.additions,
           deletions: detailData.deletions,
+          files_changed,
+          review_comments: detailData.review_comments || 0,
+          commits_count,
+          draft: pr.draft || false,
         };
       })
     );

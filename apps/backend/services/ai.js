@@ -119,17 +119,23 @@ async function scorePRRisk(pr) {
 }
 
 function fallbackScorePRRisk(pr) {
+  const criticalPaths = /src\/core|src\/auth|db\.js|index\.js|\.config|package\.json/i;
+  const files = Array.isArray(pr.files_changed) ? pr.files_changed : [];
+  const touchesCritical = files.some(f => criticalPaths.test(f));
+  
   const lines = Number(pr.additions || 0) + Number(pr.deletions || 0);
   const stale = Number(pr.staleness_score || 0);
+  const isDraft = pr.draft;
+  
   let risk = 'low';
 
-  if (lines > 500 || stale > 120) {
+  if ((touchesCritical && !isDraft) || lines > 500 || stale > 120) {
     risk = 'high';
-  } else if (lines > 150 || stale > 45) {
+  } else if ((lines > 150 || stale > 45 || (touchesCritical && isDraft))) {
     risk = 'medium';
   }
 
-  const reason = `Heuristic score based on ${lines} changed lines and ${Math.round(stale)} stale days.`;
+  const reason = `${touchesCritical ? 'Touches critical files. ' : ''}${lines} lines changed, ${Math.round(stale)} staleness score${isDraft ? ' (draft)' : ''}.`;
   return { risk, reason };
 }
 
@@ -163,6 +169,8 @@ function fallbackAnalyzeRepoHealth(prs) {
   const countsByAuthor = {};
   let mostStagnant = null;
   let stagnantScore = -1;
+  let totalReviewCoverage = 0;
+  let draftCount = 0;
 
   for (const pr of prs) {
     const author = pr.author || 'unknown';
@@ -171,6 +179,12 @@ function fallbackAnalyzeRepoHealth(prs) {
     if (stale > stagnantScore) {
       stagnantScore = stale;
       mostStagnant = pr;
+    }
+    if (pr.review_comments && pr.review_comments > 0) {
+      totalReviewCoverage++;
+    }
+    if (pr.draft) {
+      draftCount++;
     }
   }
 
@@ -184,6 +198,7 @@ function fallbackAnalyzeRepoHealth(prs) {
   const avgStale = total > 0
     ? prs.reduce((sum, pr) => sum + Number(pr.staleness_score || 0), 0) / total
     : 0;
+  const reviewCoverage = Math.round((totalReviewCoverage / Math.max(1, total - draftCount)) * 100);
   const maintainabilityGrade = avgStale < 20 ? 'A' : avgStale < 45 ? 'B' : avgStale < 80 ? 'C' : avgStale < 120 ? 'D' : 'F';
 
   return {
@@ -193,14 +208,14 @@ function fallbackAnalyzeRepoHealth(prs) {
     stagnant_pr: mostStagnant?.title || 'No PRs found',
     leaders,
     risks: [
-      avgStale > 60 ? 'PR queue is aging and may hide integration risk.' : 'PR cycle time is mostly within healthy bounds.',
-      leaders.length <= 1 ? 'Critical human bottleneck: one dominant contributor.' : 'Knowledge appears spread across multiple contributors.',
-      total > 80 ? 'Large active queue can trigger review debt spiral.' : 'Queue size is manageable for current throughput.'
+      avgStale > 60 ? 'PR queue is aging: stale PRs represent integration risk.' : `PR health is good: avg age is ${Math.round(avgStale)} days.`,
+      leaders.length <= 1 ? 'Critical human bottleneck: one developer dominates contributions.' : `Good distribution: ${leaders.length} active contributors.`,
+      total > 80 && draftCount === 0 ? 'Large active queue without drafts suggests WIP control issues.' : `Queue size is manageable (${total} total, ${draftCount} drafts).`
     ],
     recommendation: [
-      'Cap WIP by enforcing PR aging alerts.',
-      'Rotate reviewers weekly to reduce ownership concentration.',
-      'Prioritize top stale PRs before opening new feature branches.'
+      'Cap WIP by reviewing stale PRs first before new branches.',
+      `Rotate code review duties among ${Math.min(leaders.length, 3)} to spread knowledge.`,
+      'Set review SLA: high-priority PRs reviewed within 24 hours.'
     ]
   };
 }
@@ -233,9 +248,9 @@ function fallbackAnalyzeRepoVelocity(prs) {
   let maintenance = 0;
 
   for (const title of titles) {
-    if (/feat|feature|support|add|improve|perf/.test(title)) {
+    if (/feat|feature|support|add|improve|perf|monetiz|revenue|growth/.test(title)) {
       revenue += 1;
-    } else if (/refactor|migrate|cleanup|deprecate|debt|rewrite/.test(title)) {
+    } else if (/refactor|migrate|cleanup|deprecate|debt|rewrite|tech[_-]debt/.test(title)) {
       debt += 1;
     } else {
       maintenance += 1;
@@ -247,25 +262,39 @@ function fallbackAnalyzeRepoVelocity(prs) {
   const debtPct = Math.round((debt / total) * 100);
   const maintenancePct = Math.max(0, 100 - revenuePct - debtPct);
 
-  const topRevenue = prs.find((pr) => /feat|feature|support|add|improve|perf/i.test(pr.title || ''));
+  const topRevenue = prs.find((pr) => /feat|feature|support|add|improve|perf|monetiz/i.test(pr.title || ''));
   const topDebt = prs.find((pr) => /refactor|migrate|cleanup|deprecate|debt|rewrite/i.test(pr.title || ''));
+  
+  // More specific insight based on distribution
+  let heroInsight = '';
+  if (revenuePct > 60) {
+    heroInsight = 'Team is heavily feature-focused, ensure technical debt doesn\'t pile up.';
+  } else if (debtPct > 40) {
+    heroInsight = 'Significant refactoring effort: good investment in maintainability.';
+  } else {
+    heroInsight = 'Balanced approach: features, maintenance, and debt reduction happening in parallel.';
+  }
 
   return {
     revenue_drivers: revenuePct,
     technical_debt: debtPct,
     maintenance: maintenancePct,
-    hero_insight: `Heuristic breakdown from ${prs.length} open PRs suggests where team effort is currently concentrated.`,
+    hero_insight: heroInsight,
     top_revenue_pr: topRevenue?.title || prs[0]?.title || 'N/A',
     top_debt_pr: topDebt?.title || prs[0]?.title || 'N/A'
   };
 }
 
 async function analyzeRepoConflicts(prs) {
-  const prData = prs.map((pr) => ({ pr_number: pr.pr_number, title: pr.title }));
+  const prData = prs.map((pr) => ({ 
+    pr_number: pr.pr_number, 
+    title: pr.title,
+    files: Array.isArray(pr.files_changed) ? pr.files_changed : []
+  }));
   const prompt = `You are a senior engineer doing a pre-merge risk assessment.
-Look at these open PR titles and predict which ones are likely to conflict with each other based on the areas of code they probably touch.
+Look at these open PRs, their files, and predict which ones are likely to conflict with each other.
 
-Open PRs: ${JSON.stringify(prData)}
+Open PRs with files touched: ${JSON.stringify(prData.slice(0, 20))}
 
 Return ONLY a valid JSON array with no markdown:
 [
@@ -282,24 +311,55 @@ Return ONLY a valid JSON array with no markdown:
 }
 
 function fallbackAnalyzeRepoConflicts(prs) {
-  return prs.slice(0, 30).map((pr) => {
-    const lines = Number(pr.additions || 0) + Number(pr.deletions || 0);
-    const title = String(pr.title || '');
-    let collision_risk = 'low';
+  // File-level actual conflict detection
+  const filesByPR = prs.map(pr => ({
+    pr_number: pr.pr_number,
+    title: pr.title,
+    files: Array.isArray(pr.files_changed) ? pr.files_changed : [],
+    lines: Number(pr.additions || 0) + Number(pr.deletions || 0)
+  }));
 
-    if (lines > 400 || /core|runtime|api|config|build|deps/i.test(title)) {
+  const conflicts = [];
+  
+  for (let i = 0; i < filesByPR.length; i++) {
+    const prA = filesByPR[i];
+    let collision_risk = 'low';
+    let conflictingPRs = [];
+    let sharedFiles = [];
+
+    // Check against all other PRs
+    for (let j = 0; j < filesByPR.length; j++) {
+      if (i === j) continue;
+      const prB = filesByPR[j];
+      const overlap = prA.files.filter(f => prB.files.includes(f));
+      
+      if (overlap.length > 0) {
+        conflictingPRs.push(prB.pr_number);
+        sharedFiles.push(...overlap);
+      }
+    }
+
+    // Deduplicate shared files
+    sharedFiles = [...new Set(sharedFiles)];
+    const criticalFiles = /core|auth|db\.js|index\.js|package\.json/.test(sharedFiles.join('|'));
+    
+    if (conflictingPRs.length > 2 || (conflictingPRs.length > 0 && criticalFiles)) {
       collision_risk = 'high';
-    } else if (lines > 120 || /refactor|update|fix|feat/i.test(title)) {
+    } else if (conflictingPRs.length > 0 || prA.lines > 300) {
       collision_risk = 'medium';
     }
 
-    return {
-      pr_number: pr.pr_number,
-      title: pr.title,
+    conflicts.push({
+      pr_number: prA.pr_number,
+      title: prA.title,
       collision_risk,
-      reason: `Heuristic estimate based on title keywords and ${lines} changed lines.`
-    };
-  });
+      reason: conflictingPRs.length > 0 
+        ? `Shares files with ${conflictingPRs.length} other PR(s): ${sharedFiles.slice(0, 2).join(', ')}${sharedFiles.length > 2 ? '...' : ''}`
+        : `Large change (${prA.lines} lines) with moderate complexity.`
+    });
+  }
+
+  return conflicts.slice(0, 30);
 }
 
 function isRecoverableAIError(error) {
