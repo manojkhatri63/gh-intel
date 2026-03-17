@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { apiUrl } from '../lib/api';
 
 type PR = {
   id: number;
@@ -52,7 +53,7 @@ export default function PRsPage() {
   const [filter, setFilter] = useState<'all' | 'high' | 'med' | 'low'>('all');
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/prs`)
+    fetch(apiUrl('/api/prs'))
       .then(r => r.json())
       .then(data => { setPrs(Array.isArray(data) ? data : MOCK_PRS); setLoading(false); })
       .catch(() => { setPrs(MOCK_PRS); setLoading(false); });
@@ -68,8 +69,8 @@ export default function PRsPage() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/prs/refresh`, { method: 'POST' });
-      const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/prs`);
+      await fetch(apiUrl('/api/prs/refresh'), { method: 'POST' });
+      const r = await fetch(apiUrl('/api/prs'));
       const data = await r.json();
       setPrs(Array.isArray(data) ? data : MOCK_PRS);
     } catch {

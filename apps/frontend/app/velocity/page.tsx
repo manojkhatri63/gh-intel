@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { apiUrl } from '../lib/api';
 
 type VelocityData = {
   revenue_drivers: number;
@@ -21,8 +22,6 @@ function VelocityPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const backendUrl = useMemo(() => process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', []);
-
   useEffect(() => {
     async function loadVelocity() {
       if (!repo) {
@@ -33,7 +32,7 @@ function VelocityPageContent() {
       setLoading(true);
       setError('');
       try {
-        const response = await fetch(`${backendUrl}/api/analysis/velocity/${encodeURIComponent(repo)}`);
+        const response = await fetch(apiUrl(`/api/analysis/velocity/${encodeURIComponent(repo)}`));
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || 'Failed to load velocity analysis');
@@ -51,7 +50,7 @@ function VelocityPageContent() {
       }
     }
     loadVelocity();
-  }, [backendUrl, repo]);
+  }, [repo]);
 
   const revenue = Math.max(0, Math.min(100, Number(data?.revenue_drivers || 0)));
   const debt = Math.max(0, Math.min(100, Number(data?.technical_debt || 0)));

@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { apiUrl } from '../lib/api';
 
 type HealthData = {
   bus_factor_score: number;
@@ -34,8 +35,6 @@ function HealthPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const backendUrl = useMemo(() => process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', []);
-
   useEffect(() => {
     async function loadHealth() {
       if (!repo) {
@@ -48,7 +47,7 @@ function HealthPageContent() {
       setError('');
 
       try {
-        const response = await fetch(`${backendUrl}/api/analysis/health/${encodeURIComponent(repo)}`);
+        const response = await fetch(apiUrl(`/api/analysis/health/${encodeURIComponent(repo)}`));
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || 'Failed to load health radar');
@@ -68,7 +67,7 @@ function HealthPageContent() {
     }
 
     loadHealth();
-  }, [backendUrl, repo]);
+  }, [repo]);
 
   return (
     <main style={{ minHeight: '100vh', background: '#000', color: '#d1fae5', padding: '2rem' }}>

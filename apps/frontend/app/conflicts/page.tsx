@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { apiUrl } from '../lib/api';
 
 type ConflictEntry = {
   pr_number: number;
@@ -32,8 +33,6 @@ function ConflictsPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const backendUrl = useMemo(() => process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', []);
-
   useEffect(() => {
     async function loadConflicts() {
       if (!repo) {
@@ -43,7 +42,7 @@ function ConflictsPageContent() {
       setLoading(true);
       setError('');
       try {
-        const response = await fetch(`${backendUrl}/api/analysis/conflicts/${encodeURIComponent(repo)}`);
+        const response = await fetch(apiUrl(`/api/analysis/conflicts/${encodeURIComponent(repo)}`));
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || 'Failed to load conflict analysis');
@@ -57,7 +56,7 @@ function ConflictsPageContent() {
       }
     }
     loadConflicts();
-  }, [backendUrl, repo]);
+  }, [repo]);
 
   const sorted = [...data].sort(
     (a, b) => (RISK_ORDER[a.collision_risk] ?? 3) - (RISK_ORDER[b.collision_risk] ?? 3)

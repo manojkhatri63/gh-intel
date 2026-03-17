@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
+import { apiUrl } from './lib/api';
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -11,10 +12,6 @@ function HomeContent() {
   const [readyRepo, setReadyRepo] = useState('');
   const [searching, setSearching] = useState(false);
   const [matches, setMatches] = useState<Array<{ full_name: string; description: string; stars: number }>>([]);
-
-  const backendUrl = useMemo(() => {
-    return process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-  }, []);
 
   useEffect(() => {
     const queryRepo = searchParams.get('repo');
@@ -59,7 +56,7 @@ function HomeContent() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${backendUrl}/api/prs/refresh`, {
+      const response = await fetch(apiUrl('/api/prs/refresh'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo: trimmed })
@@ -86,7 +83,7 @@ function HomeContent() {
     const timeoutId = setTimeout(async () => {
       setSearching(true);
       try {
-        const response = await fetch(`${backendUrl}/api/prs/search?q=${encodeURIComponent(trimmed)}`);
+        const response = await fetch(apiUrl(`/api/prs/search?q=${encodeURIComponent(trimmed)}`));
         if (!response.ok) {
           throw new Error('Search failed');
         }
@@ -100,7 +97,7 @@ function HomeContent() {
     }, 250);
 
     return () => clearTimeout(timeoutId);
-  }, [backendUrl, repo]);
+  }, [repo]);
 
   return (
     <main style={{

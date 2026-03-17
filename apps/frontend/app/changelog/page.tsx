@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { apiUrl } from '../lib/api';
 
 type ChangelogEntry = {
   id?: number;
@@ -40,15 +41,13 @@ function ChangelogPageContent() {
   const [notes, setNotes] = useState('');
   const [generating, setGenerating] = useState(false);
 
-  const backendUrl = useMemo(() => process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', []);
-
   useEffect(() => {
     async function loadChangelog() {
       setLoading(true);
       setError('');
       try {
         const query = repo ? `?repo=${encodeURIComponent(repo)}` : '';
-        const response = await fetch(`${backendUrl}/api/changelog${query}`);
+        const response = await fetch(apiUrl(`/api/changelog${query}`));
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || 'Failed to load changelog');
@@ -64,14 +63,14 @@ function ChangelogPageContent() {
     }
 
     loadChangelog();
-  }, [backendUrl, repo]);
+  }, [repo]);
 
   async function generateReleaseNotes() {
     setGenerating(true);
     setError('');
 
     try {
-      const response = await fetch(`${backendUrl}/api/changelog/generate`, {
+      const response = await fetch(apiUrl('/api/changelog/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo: repo || undefined })
