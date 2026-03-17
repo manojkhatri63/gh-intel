@@ -1,51 +1,73 @@
 const express = require('express');
-const router = express.Router();
-const pool = require('../db');
-const { fetchOpenPRsForRepo } = require('../services/github');
+const { fetchOpenPRsForRepo, searchRepositories } = require('../services/github');
 const { scorePR } = require('../services/scoring');
+const pool = require('../db');
+const { normalizeRepoInput, isRepoValidationError } = require('../utils/repo');
 
-// GET: Fetch scored PRs from DB
-router.get('/', async (req, res) => {
-  const { repo } = req.query;
+const router = express.Router();
+
+router.get('/search', async (req, res) => {
   try {
+    const q = String(req.query.q || '').trim();
+    if (!q || q.length < 2) {
+      return res.json([]);
+    }
+
+    const results = await searchRepositories(q);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to search repositories.' });
+  }
+});
+
+router.get('/', async (req, res) => {
+  try {
+    const repo = req.query.repo ? normalizeRepoInput(req.query.repo) : null;
     let query = 'SELECT * FROM pull_requests';
-    let params = [];
-    
+    const params = [];
+
     if (repo) {
       query += ' WHERE repo_name = $1';
       params.push(repo);
     }
-    
+
     query += ' ORDER BY priority_score DESC';
+
     const result = await pool.query(query, params);
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    const status = isRepoValidationError(error) ? 400 : 500;
+    res.status(status).json({ error: error.message });
   }
 });
 
-// POST: Trigger refresh for a specific repo
 router.post('/refresh', async (req, res) => {
-  const { repo } = req.body;
-  if (!repo) return res.status(400).json({ error: 'Repo required' });
-
   try {
-    const rawPRs = await fetchOpenPRsForRepo(repo);
-    const scoredPRs = rawPRs.map(scorePR);
+    const repo = normalizeRepoInput(req.body?.repo);
 
+    const prs = await fetchOpenPRsForRepo(repo);
+    const scoredPRs = prs.map(scorePR);
+
+    let count = 0;
     for (const pr of scoredPRs) {
+      const now = new Date();
       await pool.query(
         `INSERT INTO pull_requests (repo_name, pr_number, title, author, created_at, updated_at, additions, deletions, staleness_score, size_score, priority_score, fetched_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (repo_name, pr_number) DO UPDATE SET
-         priority_score = EXCLUDED.priority_score, updated_at = EXCLUDED.updated_at`,
-        [pr.repo_name, pr.pr_number, pr.title, pr.author, pr.created_at, pr.updated_at, pr.additions, pr.deletions, pr.staleness_score, pr.size_score, pr.priority_score]
+         title = $3, author = $4, created_at = $5, updated_at = $6,
+         additions = $7, deletions = $8, staleness_score = $9,
+         size_score = $10, priority_score = $11, fetched_at = $12`,
+        [pr.repo_name, pr.pr_number, pr.title, pr.author, pr.created_at, pr.updated_at,
+         pr.additions, pr.deletions, pr.staleness_score, pr.size_score, pr.priority_score, now]
       );
+      count++;
     }
 
-    res.json({ success: true, count: scoredPRs.length });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({ success: true, count, repo });
+  } catch (error) {
+    const status = isRepoValidationError(error) ? 400 : 500;
+    res.status(status).json({ error: error.message });
   }
 });
 
