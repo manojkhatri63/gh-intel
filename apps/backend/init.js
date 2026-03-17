@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const pool = require('./db');
 const sql = `CREATE TABLE IF NOT EXISTS pull_requests (
     id SERIAL PRIMARY KEY,

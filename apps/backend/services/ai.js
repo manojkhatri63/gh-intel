@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 function getTextFromClaudeResponse(data) {
   if (!data || !Array.isArray(data.content) || !data.content[0] || !data.content[0].text) {
