@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 type HealthData = {
   bus_factor_score: number;
@@ -27,7 +27,7 @@ function gradeColor(grade: string) {
   return '#ef4444';
 }
 
-export default function HealthPage() {
+function HealthPageContent() {
   const searchParams = useSearchParams();
   const repo = searchParams.get('repo') || '';
   const [data, setData] = useState<HealthData | null>(null);
@@ -151,5 +151,13 @@ export default function HealthPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function HealthPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: '100vh', background: '#000', color: '#d1fae5', padding: '2rem' }}>Loading health...</main>}>
+      <HealthPageContent />
+    </Suspense>
   );
 }

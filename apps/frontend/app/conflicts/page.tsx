@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 type ConflictEntry = {
   pr_number: number;
@@ -25,7 +25,7 @@ function riskBg(risk: string) {
 
 const RISK_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-export default function ConflictsPage() {
+function ConflictsPageContent() {
   const searchParams = useSearchParams();
   const repo = searchParams.get('repo') || '';
   const [data, setData] = useState<ConflictEntry[]>([]);
@@ -151,5 +151,13 @@ export default function ConflictsPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ConflictsPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: '100vh', background: '#0a0a0a', color: '#d1fae5', padding: '2rem' }}>Loading conflicts...</main>}>
+      <ConflictsPageContent />
+    </Suspense>
   );
 }

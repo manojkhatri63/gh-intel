@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 type ChangelogEntry = {
   id?: number;
@@ -31,7 +31,7 @@ function groupByType(entries: ChangelogEntry[]): GroupedCommits {
   }, { feat: [], fix: [], chore: [], other: [] });
 }
 
-export default function ChangelogPage() {
+function ChangelogPageContent() {
   const searchParams = useSearchParams();
   const repo = searchParams.get('repo') || '';
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
@@ -145,5 +145,13 @@ export default function ChangelogPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ChangelogPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: '100vh', background: '#010409', color: '#d1fae5', padding: '2rem' }}>Loading changelog...</main>}>
+      <ChangelogPageContent />
+    </Suspense>
   );
 }

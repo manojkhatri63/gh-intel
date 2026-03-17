@@ -1,9 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const [repo, setRepo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -310,5 +310,13 @@ export default function Home() {
         }
       `}</style>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: '100vh', background: '#000', color: '#d1fae5', padding: '2rem' }}>Loading...</main>}>
+      <HomeContent />
+    </Suspense>
   );
 }

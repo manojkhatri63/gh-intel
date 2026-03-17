@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 type VelocityData = {
   revenue_drivers: number;
@@ -14,7 +14,7 @@ type VelocityData = {
   no_data?: boolean;
 };
 
-export default function VelocityPage() {
+function VelocityPageContent() {
   const searchParams = useSearchParams();
   const repo = searchParams.get('repo') || '';
   const [data, setData] = useState<VelocityData | null>(null);
@@ -146,6 +146,14 @@ export default function VelocityPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function VelocityPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: '100vh', background: '#0a0a0a', color: '#d1fae5', padding: '2rem' }}>Loading velocity...</main>}>
+      <VelocityPageContent />
+    </Suspense>
   );
 }
 
